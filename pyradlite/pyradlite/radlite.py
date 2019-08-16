@@ -22,7 +22,7 @@ except ImportError:
     import pyfits as fitter
 
 #Set helpful constants
-dotest = False
+dotest = True
 if dotest:
     au0 = 1.49597870E13
     c0 = 2.99792458E10
@@ -1993,15 +1993,13 @@ class RadliteModel():
         writestr += ("!TRANS + UP + LOW + EINSTEINA(s^-1) + FREQ(cm^-1) + "
                         +"E_u(cm^-1) + v_l + Q_p + Q_pp\n")
         for ai in range(0, numtrans):
-            levu = np.where((np.abs(Euniqarr - Euparr[ai])
-                                /1.0/Euparr[ai]) < 1E-4)[0]
+            levu = np.argmin(np.abs(Euniqarr - Euparr[ai]))
             if Elowarr[ai] != 0: #If not down to 0-level
-                levl = np.where((np.abs(Euniqarr - Elowarr[ai])
-                                /1.0/Elowarr[ai]) < 1E-4)[0]
+                levl = np.argmin(np.abs(Euniqarr - Elowarr[ai]))
             else:
                 levl = np.where(Euniqarr == 0)[0]
             writestr += ("{0:5d}{1:5d}{2:5d}{3:12.3e}{4:16.7f}".format(
-                                (ai+1), levu[0]+1, levl[0]+1, Aarr[ai],
+                                (ai+1), levu+1, levl+1, Aarr[ai],
                                 wavenumarr[ai])
                         +"{0:12.5f}{1:>15}{2:>15}{3:>15}{4:>15}\n".format(
                                 Euparr[ai], vuparr[ai], vlowarr[ai],
@@ -3061,7 +3059,7 @@ class RadliteSpectrum():
         #Prepare wavelen. [mu] array for output spectrum at desired resolution
         userres = self.get_attr("vsampling") #User-specified sampling res.
         userfrac = (1 + (userres/1.0/cinkm0)) #Fraction by which mu will grow
-        userlen = int(np.floor(np.log(mumax/1.0/mumin)
+        userlen = int(np.floor(np.log(fullmu_arr.max()/1.0/mumin)
                             / np.log(userfrac)) + 1) #mu array size
         outmu_arr = np.array([(mumin*(userfrac**ai))
                                 for ai in range(0, userlen)])
@@ -3100,6 +3098,7 @@ class RadliteSpectrum():
             #Find indices in full spec. array where this em. will be added
             newinds = np.where(((fullmu_arr <= muolds[-1])
                                 & (fullmu_arr >= muolds[0])))[0]
+
             #Interpolate  mol. em. across full spec. x-axis (span of box-width)
             munews = fullmu_arr[newinds]
             interpfunc = interper(x=muolds, y=emolds,
@@ -3138,16 +3137,16 @@ class RadliteSpectrum():
             print("Convolving emission and (emission+continuum) to user-"
                     +"specified observation resolution...")
         #Define a gaussian kernel for convolution
-        numgauss = np.ceil(3.0*obsres/vres) #Number of kernel points
+        numgauss = int(np.ceil(3.0*obsres/vres)) #Number of kernel points
         toppart = -1*2*((np.arange(0, numgauss) - ((numgauss-1)/2.0))**2)
         botpart = ((obsres/1.0/vres)**2)*np.log(2.0)
         kerngauss = np.exp(toppart/botpart)
 
         #Convolve emission-spec. and line-spec.
-        #Edge behavior: outer vals reflected at input edge to fill missing vals
-        resem_arr = (ndimager.convolve(fullem_arr, kerngauss, mode="reflect")
+        #Edge behavior: outer vals beyond input edge repeat vals at edge
+        resem_arr = (ndimager.convolve(fullem_arr, kerngauss, mode="nearest")
                         /1.0/np.sum(kerngauss)) #Convolved, norm. by kernel sum
-        resy_arr = (ndimager.convolve(fully_arr, kerngauss, mode="reflect")
+        resy_arr = (ndimager.convolve(fully_arr, kerngauss, mode="nearest")
                         /1.0/np.sum(kerngauss)) #Convolved, norm. by kernel sum
 
 
